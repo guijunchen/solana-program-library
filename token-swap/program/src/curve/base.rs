@@ -69,19 +69,20 @@ impl SwapCurve {
     /// given an amount of source token.
     pub fn swap(
         &self,
-        source_amount: u128,
-        swap_source_amount: u128,
-        swap_destination_amount: u128,
+        source_amount: u128,//amount_in
+        swap_source_amount: u128, //source_account.amount source_account = Self::unpack_token_account(swap_source_info, token_swap.token_program_id())?;
+        swap_destination_amount: u128, //dest_account.amount dest_account = Self::unpack_token_account(swap_destination_info, token_swap.token_program_id())?;
         trade_direction: TradeDirection,
         fees: &Fees,
     ) -> Option<SwapResult> {
         // debit the fee to calculate the amount swapped
-        let trade_fee = fees.trading_fee(source_amount)?;
-        let owner_fee = fees.owner_trading_fee(source_amount)?;
+        let trade_fee = fees.trading_fee(source_amount)?; //traderFee Percentage of the fee that goes to the liquidity providers
+        let owner_fee = fees.owner_trading_fee(source_amount)?; //ownerFee Percentage of the fee that goes to orca
 
         let total_fees = trade_fee.checked_add(owner_fee)?;
-        let source_amount_less_fees = source_amount.checked_sub(total_fees)?;
+        let source_amount_less_fees = source_amount.checked_sub(total_fees)?; //amount_in 减去手续费
 
+        //计算a b可兑换数量
         let SwapWithoutFeesResult {
             source_amount_swapped,
             destination_amount_swapped,

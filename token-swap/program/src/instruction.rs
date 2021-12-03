@@ -513,18 +513,18 @@ pub fn withdraw_single_token_type_exact_amount_out(
 
 /// Creates a 'swap' instruction.
 pub fn swap(
-    program_id: &Pubkey,
-    token_program_id: &Pubkey,
-    swap_pubkey: &Pubkey,
-    authority_pubkey: &Pubkey,
-    user_transfer_authority_pubkey: &Pubkey,
-    source_pubkey: &Pubkey,
-    swap_source_pubkey: &Pubkey,
-    swap_destination_pubkey: &Pubkey,
-    destination_pubkey: &Pubkey,
-    pool_mint_pubkey: &Pubkey,
-    pool_fee_pubkey: &Pubkey,
-    host_fee_pubkey: Option<&Pubkey>,
+    program_id: &Pubkey, //swap 合约地址
+    token_program_id: &Pubkey, //token 合约地址
+    swap_pubkey: &Pubkey,//？//tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+    authority_pubkey: &Pubkey,//authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+    user_transfer_authority_pubkey: &Pubkey,//Swap userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+    source_pubkey: &Pubkey, //userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+    swap_source_pubkey: &Pubkey, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+    swap_destination_pubkey: &Pubkey, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+    destination_pubkey: &Pubkey, //userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+    pool_mint_pubkey: &Pubkey, //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+    pool_fee_pubkey: &Pubkey, //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+    host_fee_pubkey: Option<&Pubkey>, //创建owner对tokenPool mint swap账户 SWAP_PROGRAM_OWNER_FEE_ADDRESS ? await tokenPool.createAccount(owner.publicKey): null;
     instruction: Swap,
 ) -> Result<Instruction, ProgramError> {
     let data = SwapInstruction::Swap(instruction).pack();

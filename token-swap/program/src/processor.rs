@@ -331,16 +331,16 @@ impl Processor {
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
-        let swap_info = next_account_info(account_info_iter)?;
-        let authority_info = next_account_info(account_info_iter)?;
-        let user_transfer_authority_info = next_account_info(account_info_iter)?;
-        let source_info = next_account_info(account_info_iter)?;
-        let swap_source_info = next_account_info(account_info_iter)?;
-        let swap_destination_info = next_account_info(account_info_iter)?;
-        let destination_info = next_account_info(account_info_iter)?;
-        let pool_mint_info = next_account_info(account_info_iter)?;
-        let pool_fee_account_info = next_account_info(account_info_iter)?;
-        let token_program_info = next_account_info(account_info_iter)?;
+        let swap_info = next_account_info(account_info_iter)?; //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+        let authority_info = next_account_info(account_info_iter)?; //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+        let user_transfer_authority_info = next_account_info(account_info_iter)?; //Swap userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+        let source_info = next_account_info(account_info_iter)?; //userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+        let swap_source_info = next_account_info(account_info_iter)?; //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+        let swap_destination_info = next_account_info(account_info_iter)?; //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+        let destination_info = next_account_info(account_info_iter)?; //userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+        let pool_mint_info = next_account_info(account_info_iter)?; //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+        let pool_fee_account_info = next_account_info(account_info_iter)?; //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+        let token_program_info = next_account_info(account_info_iter)?;  //spl-token TOKEN_PROGRAM_ID 合约地址
 
         if swap_info.owner != program_id {
             return Err(ProgramError::IncorrectProgramId);
@@ -352,11 +352,13 @@ impl Processor {
         {
             return Err(SwapError::InvalidProgramAddress.into());
         }
+        //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
         if !(*swap_source_info.key == *token_swap.token_a_account()
             || *swap_source_info.key == *token_swap.token_b_account())
         {
             return Err(SwapError::IncorrectSwapAccount.into());
         }
+        //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
         if !(*swap_destination_info.key == *token_swap.token_a_account()
             || *swap_destination_info.key == *token_swap.token_b_account())
         {
@@ -371,12 +373,15 @@ impl Processor {
         if swap_destination_info.key == destination_info.key {
             return Err(SwapError::InvalidInput.into());
         }
+        //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
         if *pool_mint_info.key != *token_swap.pool_mint() {
             return Err(SwapError::IncorrectPoolMint.into());
         }
+        //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
         if *pool_fee_account_info.key != *token_swap.pool_fee_account() {
             return Err(SwapError::IncorrectFeeAccount.into());
         }
+        //token 合约地址
         if *token_program_info.key != *token_swap.token_program_id() {
             return Err(SwapError::IncorrectTokenProgramId.into());
         }
@@ -402,6 +407,8 @@ impl Processor {
                 token_swap.fees(),
             )
             .ok_or(SwapError::ZeroTradingTokens)?;
+        //destination_amount_swapped:经过公式计算后目标计算价格/数量
+        //minimum_amount_out期待兑换最小价格/数量 //也可以包括滑点价格
         if result.destination_amount_swapped < to_u128(minimum_amount_out)? {
             return Err(SwapError::ExceededSlippage.into());
         }
@@ -417,25 +424,26 @@ impl Processor {
             ),
         };
 
+        //将用户的Atoken的币转到池子交易对的对应token A账号
         Self::token_transfer(
-            swap_info.key,
-            token_program_info.clone(),
-            source_info.clone(),
-            swap_source_info.clone(),
-            user_transfer_authority_info.clone(),
-            token_swap.bump_seed(),
-            to_u64(result.source_amount_swapped)?,
+            swap_info.key, //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+            token_program_info.clone(), //spl-token TOKEN_PROGRAM_ID 合约地址
+            source_info.clone(), //userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+            swap_source_info.clone(), //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+            user_transfer_authority_info.clone(), //Swap userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+            token_swap.bump_seed(), // token_swap seed
+            to_u64(result.source_amount_swapped)?, //转多少token
         )?;
-
+        //待分析
         let mut pool_token_amount = token_swap
             .swap_curve()
             .withdraw_single_token_type_exact_out(
                 result.owner_fee,
                 swap_token_a_amount,
                 swap_token_b_amount,
-                to_u128(pool_mint.supply)?,
+                to_u128(pool_mint.supply)?, //let pool_mint = Self::unpack_mint(pool_mint_info, token_swap.token_program_id())?;
                 trade_direction,
-                token_swap.fees(),
+                token_swap.fees(), // All fee information
             )
             .ok_or(SwapError::FeeCalculationFailure)?;
 
@@ -468,9 +476,10 @@ impl Processor {
                     )?;
                 }
             }
+            //待分析
             Self::token_mint_to(
                 swap_info.key,
-                token_program_info.clone(),
+                token_program_info.clone(), 
                 pool_mint_info.clone(),
                 pool_fee_account_info.clone(),
                 authority_info.clone(),
@@ -478,16 +487,17 @@ impl Processor {
                 to_u64(pool_token_amount)?,
             )?;
         }
-
+        //将池子交易对的对应token B账号对应的币转到用户的Btoken的地址中
         Self::token_transfer(
-            swap_info.key,
-            token_program_info.clone(),
-            swap_destination_info.clone(),
-            destination_info.clone(),
-            authority_info.clone(),
-            token_swap.bump_seed(),
+            swap_info.key, //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+            token_program_info.clone(), //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+            swap_destination_info.clone(), //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+            destination_info.clone(), //userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+            authority_info.clone(), //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+            token_swap.bump_seed(), // token_swap seed
             to_u64(result.destination_amount_swapped)?,
         )?;
+        //待分析费用转到哪里去了
 
         Ok(())
     }
@@ -1063,6 +1073,7 @@ impl Processor {
             }
         }
     }
+
 }
 
 impl PrintProgramError for SwapError {

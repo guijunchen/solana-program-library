@@ -99,16 +99,16 @@ pub struct SwapV1 {
     pub bump_seed: u8,
 
     /// Program ID of the tokens being exchanged.
-    pub token_program_id: Pubkey,
+    pub token_program_id: Pubkey, //token 合约地址
 
     /// Token A
-    pub token_a: Pubkey,
+    pub token_a: Pubkey, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
     /// Token B
-    pub token_b: Pubkey,
+    pub token_b: Pubkey, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
 
     /// Pool tokens are issued when A or B tokens are deposited.
     /// Pool tokens can be withdrawn back to the original A or B token.
-    pub pool_mint: Pubkey,
+    pub pool_mint: Pubkey, //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
 
     /// Mint information for token A
     pub token_a_mint: Pubkey,
@@ -116,7 +116,7 @@ pub struct SwapV1 {
     pub token_b_mint: Pubkey,
 
     /// Pool token account to receive trading and / or withdrawal fees
-    pub pool_fee_account: Pubkey,
+    pub pool_fee_account: Pubkey,//feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
 
     /// All fee information
     pub fees: Fees,

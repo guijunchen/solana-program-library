@@ -5,6 +5,7 @@ import * as BufferLayout from 'buffer-layout';
 import type {Connection, TransactionSignature} from '@solana/web3.js';
 import {
   Account,
+  Keypair,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -15,8 +16,12 @@ import * as Layout from './layout';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {loadAccount} from './util/account';
 
+// export const TOKEN_SWAP_PROGRAM_ID: PublicKey = new PublicKey(
+//   'SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8',
+// );
+
 export const TOKEN_SWAP_PROGRAM_ID: PublicKey = new PublicKey(
-  'SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8',
+  '53hXUL3XeUYynAsWhGZRmos3kLFusWPdtgwxoA597NYE',
 );
 
 /**
@@ -132,19 +137,19 @@ export class TokenSwap {
     public hostFeeNumerator: Numberu64,
     public hostFeeDenominator: Numberu64,
     public curveType: number,
-    public payer: Account,
+    public payer: Keypair,
   ) {
     this.connection = connection;
-    this.tokenSwap = tokenSwap;
-    this.swapProgramId = swapProgramId;
-    this.tokenProgramId = tokenProgramId;
-    this.poolToken = poolToken;
-    this.feeAccount = feeAccount;
-    this.authority = authority;
-    this.tokenAccountA = tokenAccountA;
-    this.tokenAccountB = tokenAccountB;
-    this.mintA = mintA;
-    this.mintB = mintB;
+    this.tokenSwap = tokenSwap; //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+    this.swapProgramId = swapProgramId; //swap 合约地址
+    this.tokenProgramId = tokenProgramId; // token 合约地址
+    this.poolToken = poolToken; //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+    this.feeAccount = feeAccount; //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+    this.authority = authority; //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+    this.tokenAccountA = tokenAccountA; //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+    this.tokenAccountB = tokenAccountB; //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+    this.mintA = mintA; //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+    this.mintB = mintB; //mintB 创建token B mint Token.createMint(payer,owner.publicKey)
     this.tradeFeeNumerator = tradeFeeNumerator;
     this.tradeFeeDenominator = tradeFeeDenominator;
     this.ownerTradeFeeNumerator = ownerTradeFeeNumerator;
@@ -154,7 +159,7 @@ export class TokenSwap {
     this.hostFeeNumerator = hostFeeNumerator;
     this.hostFeeDenominator = hostFeeDenominator;
     this.curveType = curveType;
-    this.payer = payer;
+    this.payer = payer;//swapPayer 钱包账号并且有空投币1000000000
   }
 
   /**
@@ -171,7 +176,7 @@ export class TokenSwap {
   }
 
   static createInitSwapInstruction(
-    tokenSwapAccount: Account,
+    tokenSwapAccount: Keypair,
     authority: PublicKey,
     tokenAccountA: PublicKey,
     tokenAccountB: PublicKey,
@@ -252,7 +257,7 @@ export class TokenSwap {
     connection: Connection,
     address: PublicKey,
     programId: PublicKey,
-    payer: Account,
+    payer: Keypair,
   ): Promise<TokenSwap> {
     const data = await loadAccount(connection, address, programId);
     const tokenSwapData = TokenSwapLayout.decode(data);
@@ -343,42 +348,42 @@ export class TokenSwap {
    */
   static async createTokenSwap(
     connection: Connection,
-    payer: Account,
-    tokenSwapAccount: Account,
-    authority: PublicKey,
-    tokenAccountA: PublicKey,
-    tokenAccountB: PublicKey,
-    poolToken: PublicKey,
-    mintA: PublicKey,
-    mintB: PublicKey,
-    feeAccount: PublicKey,
-    tokenAccountPool: PublicKey,
-    swapProgramId: PublicKey,
-    tokenProgramId: PublicKey,
-    tradeFeeNumerator: number,
-    tradeFeeDenominator: number,
-    ownerTradeFeeNumerator: number,
-    ownerTradeFeeDenominator: number,
-    ownerWithdrawFeeNumerator: number,
-    ownerWithdrawFeeDenominator: number,
-    hostFeeNumerator: number,
-    hostFeeDenominator: number,
-    curveType: number,
-    curveParameters?: Numberu64,
+    payer: Keypair, //swapPayer 钱包账号并且有空投币1000000000
+    tokenSwapAccount: Keypair,  //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+    authority: PublicKey, //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+    tokenAccountA: PublicKey, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+    tokenAccountB: PublicKey, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+    poolToken: PublicKey, //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+    mintA: PublicKey, //mintA 创建token A mint Token.createMint(payer,owner.publicKey)
+    mintB: PublicKey, //mintB 创建token B mint Token.createMint(payer,owner.publicKey)
+    feeAccount: PublicKey, //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+    tokenAccountPool: PublicKey, //tokenAccountPool 创建own对tokenPool mint的关联账户:tokenPool.createAccount(owner.publicKey);
+    swapProgramId: PublicKey, //swap 合约地址
+    tokenProgramId: PublicKey, // token 合约地址
+    tradeFeeNumerator: number, //TRADING_FEE_NUMERATOR = 25;
+    tradeFeeDenominator: number, //TRADING_FEE_DENOMINATOR = 10000;
+    ownerTradeFeeNumerator: number, //OWNER_TRADING_FEE_NUMERATOR = 5;
+    ownerTradeFeeDenominator: number, //OWNER_TRADING_FEE_DENOMINATOR = 10000;
+    ownerWithdrawFeeNumerator: number, //OWNER_WITHDRAW_FEE_NUMERATOR = SWAP_PROGRAM_OWNER_FEE_ADDRESS ? 0 : 1;1
+    ownerWithdrawFeeDenominator: number,//OWNER_WITHDRAW_FEE_DENOMINATOR = SWAP_PROGRAM_OWNER_FEE_ADDRESS ? 0 : 6;6
+    hostFeeNumerator: number,//HOST_FEE_NUMERATOR = 20;
+    hostFeeDenominator: number, //HOST_FEE_DENOMINATOR = 100;
+    curveType: number, //CurveType.ConstantPrice
+    curveParameters?: Numberu64, //new Numberu64(1)
   ): Promise<TokenSwap> {
     let transaction;
     const tokenSwap = new TokenSwap(
       connection,
-      tokenSwapAccount.publicKey,
-      swapProgramId,
-      tokenProgramId,
-      poolToken,
-      feeAccount,
-      authority,
-      tokenAccountA,
-      tokenAccountB,
-      mintA,
-      mintB,
+      tokenSwapAccount.publicKey, //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+      swapProgramId, //swap 合约地址
+      tokenProgramId, // token 合约地址
+      poolToken, //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+      feeAccount, //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+      authority, //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+      tokenAccountA, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+      tokenAccountB, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+      mintA, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+      mintB, //mintB 创建token B mint Token.createMint(payer,owner.publicKey)
       new Numberu64(tradeFeeNumerator),
       new Numberu64(tradeFeeDenominator),
       new Numberu64(ownerTradeFeeNumerator),
@@ -453,38 +458,38 @@ export class TokenSwap {
    * @param minimumAmountOut Minimum amount of tokens the user will receive
    */
   async swap(
-    userSource: PublicKey,
-    poolSource: PublicKey,
-    poolDestination: PublicKey,
-    userDestination: PublicKey,
-    hostFeeAccount: PublicKey | null,
-    userTransferAuthority: Account,
-    amountIn: number | Numberu64,
-    minimumAmountOut: number | Numberu64,
+    userSource: PublicKey, //userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+    poolSource: PublicKey, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+    poolDestination: PublicKey, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+    userDestination: PublicKey, //userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+    hostFeeAccount: PublicKey | null, //创建owner对tokenPool mint swap账户 SWAP_PROGRAM_OWNER_FEE_ADDRESS ? await tokenPool.createAccount(owner.publicKey): null;
+    userTransferAuthority: Keypair, // userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+    amountIn: number | Numberu64, //SWAP_AMOUNT_IN = 100000;
+    minimumAmountOut: number | Numberu64, //SWAP_AMOUNT_OUT = SWAP_PROGRAM_OWNER_FEE_ADDRESS ? 90661 : 90674;
   ): Promise<TransactionSignature> {
     return await sendAndConfirmTransaction(
       'swap',
       this.connection,
       new Transaction().add(
         TokenSwap.swapInstruction(
-          this.tokenSwap,
-          this.authority,
-          userTransferAuthority.publicKey,
-          userSource,
-          poolSource,
-          poolDestination,
-          userDestination,
-          this.poolToken,
-          this.feeAccount,
-          hostFeeAccount,
-          this.swapProgramId,
-          this.tokenProgramId,
-          amountIn,
-          minimumAmountOut,
+          this.tokenSwap, //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+          this.authority, //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+          userTransferAuthority.publicKey, //Swap userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+          userSource,//userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+          poolSource,//tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+          poolDestination,//tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+          userDestination,//userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+          this.poolToken,//tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+          this.feeAccount,//feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+          hostFeeAccount, //创建owner对tokenPool mint swap账户 SWAP_PROGRAM_OWNER_FEE_ADDRESS ? await tokenPool.createAccount(owner.publicKey): null;
+          this.swapProgramId, //swap 合约地址
+          this.tokenProgramId, //token 合约地址
+          amountIn, //SWAP_AMOUNT_IN = 100000;
+          minimumAmountOut, //SWAP_AMOUNT_OUT = SWAP_PROGRAM_OWNER_FEE_ADDRESS ? 90661 : 90674;
         ),
       ),
-      this.payer,
-      userTransferAuthority,
+      this.payer, //swapPayer 钱包账号并且有空投币1000000000
+      userTransferAuthority, // userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
     );
   }
 
@@ -521,23 +526,23 @@ export class TokenSwap {
     );
 
     const keys = [
-      {pubkey: tokenSwap, isSigner: false, isWritable: false},
-      {pubkey: authority, isSigner: false, isWritable: false},
-      {pubkey: userTransferAuthority, isSigner: true, isWritable: false},
-      {pubkey: userSource, isSigner: false, isWritable: true},
-      {pubkey: poolSource, isSigner: false, isWritable: true},
-      {pubkey: poolDestination, isSigner: false, isWritable: true},
-      {pubkey: userDestination, isSigner: false, isWritable: true},
-      {pubkey: poolMint, isSigner: false, isWritable: true},
-      {pubkey: feeAccount, isSigner: false, isWritable: true},
-      {pubkey: tokenProgramId, isSigner: false, isWritable: false},
+      {pubkey: tokenSwap, isSigner: false, isWritable: false}, //tokenSwapAccount 钱包账户 这个才是真正createTokenSwap的地址 tokenSwapAccount.key
+      {pubkey: authority, isSigner: false, isWritable: false}, //authority 创建tokenSwapAccount钱包账户和TOKEN_SWAP_PROGRAM_ID program的派生地址
+      {pubkey: userTransferAuthority, isSigner: true, isWritable: false}, //Swap userTransferAuthority Keypair.generate();mintA.approve(userAccountA,userTransferAuthority.publicKey,owner,[],SWAP_AMOUNT_IN,);
+      {pubkey: userSource, isSigner: false, isWritable: true}, //userAccountA 创建owner对mintA swap账户并征发一定数量的币mintA.createAccount(owner.publicKey)|mintA.mintTo(userAccountA, owner, [], SWAP_AMOUNT_IN);
+      {pubkey: poolSource, isSigner: false, isWritable: true}, //tokenAccountA 创建authority对mintA的账户:mintA.createAccount(authority);
+      {pubkey: poolDestination, isSigner: false, isWritable: true}, //tokenAccountB 创建authority对mintB的账户:mintB.createAccount(authority);
+      {pubkey: userDestination, isSigner: false, isWritable: true}, //userAccountB 创建owner对mintB swap账户 mintB.createAccount(owner.publicKey);
+      {pubkey: poolMint, isSigner: false, isWritable: true}, //tokenPool 创建pool的币，这个逻辑有点不清楚待分析 Token.createMint(payer, authority)
+      {pubkey: feeAccount, isSigner: false, isWritable: true}, //feeAccount 创建own对tokenPool mint的关联账户:tokenPool.createAccount(new PublicKey(ownerKey))
+      {pubkey: tokenProgramId, isSigner: false, isWritable: false}, //token 合约地址
     ];
     if (hostFeeAccount !== null) {
-      keys.push({pubkey: hostFeeAccount, isSigner: false, isWritable: true});
+      keys.push({pubkey: hostFeeAccount, isSigner: false, isWritable: true});//创建owner对tokenPool mint swap账户 SWAP_PROGRAM_OWNER_FEE_ADDRESS ? await tokenPool.createAccount(owner.publicKey): null;
     }
     return new TransactionInstruction({
       keys,
-      programId: swapProgramId,
+      programId: swapProgramId, //swap 合约地址
       data,
     });
   }
@@ -556,7 +561,7 @@ export class TokenSwap {
     userAccountA: PublicKey,
     userAccountB: PublicKey,
     poolAccount: PublicKey,
-    userTransferAuthority: Account,
+    userTransferAuthority: Keypair,
     poolTokenAmount: number | Numberu64,
     maximumTokenA: number | Numberu64,
     maximumTokenB: number | Numberu64,
@@ -655,7 +660,7 @@ export class TokenSwap {
     userAccountA: PublicKey,
     userAccountB: PublicKey,
     poolAccount: PublicKey,
-    userTransferAuthority: Account,
+    userTransferAuthority: Keypair,
     poolTokenAmount: number | Numberu64,
     minimumTokenA: number | Numberu64,
     minimumTokenB: number | Numberu64,
@@ -753,7 +758,7 @@ export class TokenSwap {
   async depositSingleTokenTypeExactAmountIn(
     userAccount: PublicKey,
     poolAccount: PublicKey,
-    userTransferAuthority: Account,
+    userTransferAuthority: Keypair,
     sourceTokenAmount: number | Numberu64,
     minimumPoolTokenAmount: number | Numberu64,
   ): Promise<TransactionSignature> {
@@ -843,7 +848,7 @@ export class TokenSwap {
   async withdrawSingleTokenTypeExactAmountOut(
     userAccount: PublicKey,
     poolAccount: PublicKey,
-    userTransferAuthority: Account,
+    userTransferAuthority: Keypair,
     destinationTokenAmount: number | Numberu64,
     maximumPoolTokenAmount: number | Numberu64,
   ): Promise<TransactionSignature> {

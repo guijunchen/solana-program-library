@@ -1,6 +1,7 @@
 import {sendAndConfirmTransaction as realSendAndConfirmTransaction} from '@solana/web3.js';
 import type {
   Account,
+  Keypair,
   Connection,
   Transaction,
   TransactionSignature,
@@ -10,7 +11,7 @@ export function sendAndConfirmTransaction(
   title: string,
   connection: Connection,
   transaction: Transaction,
-  ...signers: Array<Account>
+  ...signers: Array<Keypair>
 ): Promise<TransactionSignature> {
   return realSendAndConfirmTransaction(connection, transaction, signers, {
     skipPreflight: false,
